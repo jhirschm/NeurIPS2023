@@ -94,7 +94,7 @@ def train(model, train_dataset, num_epochs=10, val_dataset=None, use_gpu=True, d
     # Train
     for epoch in range(num_epochs):
         if verbose:
-            print("Epoch", epoch + 1)
+            print("Epoch", epoch + 1, "of", num_epochs)
             
         model.train()
         train_loss = 0
@@ -156,11 +156,14 @@ def train(model, train_dataset, num_epochs=10, val_dataset=None, use_gpu=True, d
 
 def predict(model, model_param_path=None, test_dataset=None, use_gpu=True, data_parallel=False, output_dir=".", output_name="all_preds.npy", verbose=1):
     if model_param_path is not None:
+        params = torch.load(model_param_path)
+        if type(params) == dict and "model_state_dict" in params:
+            params = params["model_state_dict"]
         try:
-            model.load_state_dict(torch.load(model_param_path))
+            model.load_state_dict(params)
         except:
-            model = model.data_parallel()
-            model.load_state_dict(torch.load(model_param_path))
+            model = torch.nn.DataParallel(model)
+            model.load_state_dict(params)
 
     device = torch.device("cuda" if torch.cuda.is_available() and use_gpu else "cpu")
     if use_gpu:
@@ -185,16 +188,17 @@ def predict(model, model_param_path=None, test_dataset=None, use_gpu=True, data_
         for i in range(len(test_dataset)):
             if verbose:
                 print(f"Predicting batch {i+1}/{len(test_dataset)}")
-            for X, y in test_dataset:
-                X, y = X.to(device), y.to(device)
-                if final_shape is None:
-                    final_shape = y.shape[1]
-                pred = model(X)
-                for _ in range(100): # need to predict 100 times
+            sample_generator = train_dataset[i]
+                for X, y in sample_generator:
+                    X, y = X.to(device), y.to(device)
+                    if final_shape is None:
+                        final_shape = y.shape[1]
                     pred = model(X)
-                    X = X[:, 1:, :] # pop first
-                    X = torch.cat((X, torch.reshape(pred, (-1, 1, final_shape))), 1) # add to last
-                all_preds.append(pred.squeeze().cpu().numpy())
+                    for _ in range(100): # need to predict 100 times
+                        pred = model(X)
+                        X = X[:, 1:, :] # pop first
+                        X = torch.cat((X, torch.reshape(pred, (-1, 1, final_shape))), 1) # add to last
+                    all_preds.append(pred.squeeze().cpu().numpy())
 
     all_preds = np.concatenate(all_preds, axis=0)
-    np.save(os.path.join(output_dir, f"{output_name}.npy"), all_preds)
+    np.save(os.path.join(output_dir, f"{output_name}"), all_preds)
