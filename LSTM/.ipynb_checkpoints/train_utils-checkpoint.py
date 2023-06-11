@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader
 from torch.utils import data
 
 
+new_dtype = torch.float32
+
 def add_prefix(lst, prefix="X"):
     """
     Add prefix to list of file names
@@ -22,7 +24,7 @@ def add_prefix(lst, prefix="X"):
 
 
 class CustomSequence(data.Dataset):
-    def __init__(self, data_dir, file_idx, file_batch_size, model_batch_size, test_mode=False, ):
+    def __init__(self, data_dir, file_idx, file_batch_size, model_batch_size, test_mode=False, train_prefix="X", val_prefix="y"):
         """
         Custom PyTorch dataset for loading data
         @param data_dir: directory containing data
@@ -31,8 +33,8 @@ class CustomSequence(data.Dataset):
         @param model_batch_size: number of samples to load at once to feed into model
         @param test_mode: whether to load data for testing
         """
-        self.Xnames = add_prefix(file_idx)
-        self.ynames = add_prefix(file_idx, "y")
+        self.Xnames = add_prefix(file_idx, train_prefix)
+        self.ynames = add_prefix(file_idx, val_prefix)
         self.file_batch_size = file_batch_size
         self.model_batch_size = model_batch_size
         self.test_mode = test_mode
@@ -103,6 +105,7 @@ def train(model, train_dataset, num_epochs=10, val_dataset=None, use_gpu=True, d
             sample_generator = train_dataset[i]
             for X, y in sample_generator:
                 train_len += X.size(0)
+                X, y = X.to(new_dtype), y.to(new_dtype)
                 X, y = X.to(device), y.to(device)
                 optimizer.zero_grad()
                 pred = model(X)
@@ -129,6 +132,7 @@ def train(model, train_dataset, num_epochs=10, val_dataset=None, use_gpu=True, d
                 for i in range(len(val_dataset)):
                     sample_generator = val_dataset[i]
                     for X, y in sample_generator:
+                        X, y = X.to(new_dtype), y.to(new_dtype)
                         X, y = X.to(device), y.to(device)
                         val_len += X.size(0)
                         # X, y = X.cuda(), y.cuda()
@@ -190,6 +194,7 @@ def predict(model, model_param_path=None, test_dataset=None, use_gpu=True, data_
                 print(f"Predicting batch {i+1}/{len(test_dataset)}")
             sample_generator = train_dataset[i]
                 for X, y in sample_generator:
+                    X, y = X.to(new_dtype), y.to(new_dtype)
                     X, y = X.to(device), y.to(device)
                     if final_shape is None:
                         final_shape = y.shape[1]
