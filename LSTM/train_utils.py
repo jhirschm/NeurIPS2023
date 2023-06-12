@@ -24,7 +24,7 @@ def add_prefix(lst, prefix="X"):
 
 
 class CustomSequence(data.Dataset):
-    def __init__(self, data_dir, file_idx, file_batch_size, model_batch_size, test_mode=False, train_prefix="X", val_prefix="y"):
+    def __init__(self, data_dir, file_idx, file_batch_size, model_batch_size, test_mode=False, train_prefix="X_new", val_prefix="y_new"):
         """
         Custom PyTorch dataset for loading data
         @param data_dir: directory containing data
@@ -192,18 +192,18 @@ def predict(model, model_param_path=None, test_dataset=None, use_gpu=True, data_
         for i in range(len(test_dataset)):
             if verbose:
                 print(f"Predicting batch {i+1}/{len(test_dataset)}")
-            sample_generator = train_dataset[i]
-                for X, y in sample_generator:
-                    X, y = X.to(new_dtype), y.to(new_dtype)
-                    X, y = X.to(device), y.to(device)
-                    if final_shape is None:
-                        final_shape = y.shape[1]
+            sample_generator = test_dataset[i]
+            for X, y in sample_generator:
+                X, y = X.to(new_dtype), y.to(new_dtype)
+                X, y = X.to(device), y.to(device)
+                if final_shape is None:
+                    final_shape = y.shape[1]
+                pred = model(X)
+                for _ in range(100): # need to predict 100 times
                     pred = model(X)
-                    for _ in range(100): # need to predict 100 times
-                        pred = model(X)
-                        X = X[:, 1:, :] # pop first
-                        X = torch.cat((X, torch.reshape(pred, (-1, 1, final_shape))), 1) # add to last
-                    all_preds.append(pred.squeeze().cpu().numpy())
+                    X = X[:, 1:, :] # pop first
+                    X = torch.cat((X, torch.reshape(pred, (-1, 1, final_shape))), 1) # add to last
+                all_preds.append(pred.squeeze().cpu().numpy())
 
     all_preds = np.concatenate(all_preds, axis=0)
     np.save(os.path.join(output_dir, f"{output_name}"), all_preds)
